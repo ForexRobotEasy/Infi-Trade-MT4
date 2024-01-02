@@ -1,0 +1,109 @@
+mql5
+//+------------------------------------------------------------------+
+//|                                                   Infi Trade MT4 |
+//|                  Developed by Forex Robot Easy Team               |
+//|                  Website: forexroboteasy.com                      |
+//+------------------------------------------------------------------+
+
+// Input parameters
+input double LotSize = 0.01; // Initial lot size for trading
+input double GridSpacing = 20; // Distance between grid levels in pips
+input int MaxPositions = 5; // Maximum number of positions in the grid
+input double StopLoss = 50; // Stop loss level in pips
+input double TakeProfit = 100; // Take profit level in pips
+
+// Global variables
+int totalPositions = 0; // Total number of open positions
+
+//+------------------------------------------------------------------+
+//| Custom function to open a new trading position                   |
+//+------------------------------------------------------------------+
+void OpenPosition(double price, ENUM_ORDER_TYPE orderType)
+{
+   int ticket = OrderSend(Symbol(), orderType, LotSize, price, 0, NormalizeDouble(price - StopLoss * Point, Digits), NormalizeDouble(price + TakeProfit * Point, Digits), 'Infi Trade MT4', MagicNumber);
+   if(ticket > 0)
+   {
+      Print('Position opened at price ', price);
+      totalPositions++;
+   }
+   else
+   {
+      Print('Failed to open position. Error code: ', GetLastError());
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Custom function to close all open positions                       |
+//+------------------------------------------------------------------+
+void CloseAllPositions()
+{
+   for(int i = 0; i < OrdersTotal(); i++)
+   {
+      if(OrderSelect(i, SELECT_BY_POS, MODE_TRADES))
+      {
+         if(OrderSymbol() == Symbol() && OrderMagicNumber() == MagicNumber)
+         {
+            OrderClose(OrderTicket(), OrderLots(), Bid, 0, clrRed);
+            totalPositions--;
+         }
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Expert Advisor start function                                     |
+//+------------------------------------------------------------------+
+void OnTick()
+{
+   // Close all positions if maximum positions reached
+   if(totalPositions >= MaxPositions)
+   {
+      CloseAllPositions();
+   }
+   
+   // Calculate grid levels
+   double gridLevel = NormalizeDouble((Ask + GridSpacing * Point), Digits);
+   
+   // Check if grid level is below current price and open a buy position
+   if(gridLevel < Ask)
+   {
+      OpenPosition(gridLevel, ORDER_TYPE_BUY);
+   }
+   
+   // Check if grid level is above current price and open a sell position
+   if(gridLevel > Ask)
+   {
+      OpenPosition(gridLevel, ORDER_TYPE_SELL);
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Expert Advisor initialization function                            |
+//+------------------------------------------------------------------+
+void OnInit()
+{
+   // Set magic number for identifying positions
+   MagicNumber = 123456;
+   
+   // Enable dynamic lot size calculation
+   if(MarketInfo(Symbol(), MODE_LOTSIZE) == 0)
+   {
+      Print('Invalid lot size for symbol ', Symbol());
+      return;
+   }
+   
+   // Enable automatic trailing stop
+   if(!OrderModify(OrderTicket(), 0, NormalizeDouble(Bid - StopLoss * Point, Digits), NormalizeDouble(Bid + TakeProfit * Point, Digits), 0, clrGreen))
+   {
+      Print('Failed to modify order. Error code: ', GetLastError());
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Expert Advisor deinitialization function                          |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+{
+   // Close all open positions before deinitialization
+   CloseAllPositions();
+}
